@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Happy Valley Kindergarten - Mount Isa Rodeo Volunteer Sign-up</title>
+<title>Happy Valley Rodeo Volunteer Sign-up</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; }
@@ -33,6 +33,14 @@
   .form-group label { display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 6px; }
   .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-family: inherit; color: #333; }
   .form-group input:focus, .form-group select:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 3px rgba(0,102,204,0.1); }
+  .checkbox-group { margin-bottom: 16px; }
+  .checkbox-item { display: flex; align-items: center; margin-bottom: 10px; }
+  .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; margin-right: 10px; cursor: pointer; }
+  .checkbox-item label { margin: 0; cursor: pointer; font-weight: normal; }
+  .alternate-slots-section { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  .alternate-slots-section h3 { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 12px; }
+  .slots-by-day { margin-bottom: 12px; }
+  .day-heading { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 8px; }
   .button-group { display: flex; gap: 8px; margin-top: 20px; }
   button { padding: 12px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
   button.primary { background: #0066cc; color: white; border: none; }
@@ -83,11 +91,27 @@
       <input type="tel" id="phone" placeholder="(07) 1234 5678" required>
     </div>
     <div class="form-group">
-      <label>Your selected time slot *</label>
+      <label>Your preferred time slot *</label>
       <select id="selectedSlot" required>
         <option value="">Choose a time slot above</option>
       </select>
     </div>
+
+    <!-- WAITLIST OPTION -->
+    <div class="checkbox-group">
+      <div class="checkbox-item">
+        <input type="checkbox" id="waitlist" name="waitlist">
+        <label for="waitlist">Add me to the waitlist if my preferred slot fills up</label>
+      </div>
+    </div>
+
+    <!-- ALTERNATE SLOTS SECTION -->
+    <div class="alternate-slots-section">
+      <h3>I'm also willing to help with these time slots:</h3>
+      <div id="alternateSlots"></div>
+      <p style="font-size: 12px; color: #999; margin-top: 10px;">If we need extra volunteers or slots open up, we'll reach out to you.</p>
+    </div>
+    
     <div class="button-group">
       <button class="primary" id="submitBtn" onclick="submitForm()">Sign up</button>
       <button class="secondary" onclick="resetForm()">Clear</button>
@@ -125,8 +149,7 @@
 
 <script>
 // *** PASTE YOUR GOOGLE APPS SCRIPT URL HERE ***
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFyHylF7NuPvrLO2zdeFRs9NagrlEaE5-E1AAV4_ZWWkLd0jywjKMX6jOw-bfCb5uw/exec';
-// Replace YOUR_SCRIPT_ID_HERE with the URL from Step 3 in the setup instructions
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYvs0jy-MgeeHvBDgvQfIV1w60pRmtTdC0UnQQwWllfbrgYSPgvZVNuQ8hBTZhoDPC/exec';
 
 const slots = {
   friday: [
@@ -224,6 +247,7 @@ function selectSlot(slot, day) {
   const key = getSlotKey(slot, day);
   const selectEl = document.getElementById('selectedSlot');
   selectEl.value = key;
+  updateAlternateSlots();
 }
 
 function updateSelectOptions() {
@@ -243,6 +267,55 @@ function updateSelectOptions() {
       selectEl.appendChild(option);
     }
   });
+  
+  updateAlternateSlots();
+}
+
+function updateAlternateSlots() {
+  const selectedSlot = document.getElementById('selectedSlot').value;
+  const container = document.getElementById('alternateSlots');
+  container.innerHTML = '';
+  
+  // Get all slots grouped by day
+  const days = ['friday', 'saturday', 'sunday'];
+  const dayLabels = { friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday' };
+  
+  days.forEach(day => {
+    const daySlots = slots[day];
+    const checkboxes = [];
+    
+    daySlots.forEach(slot => {
+      const key = getSlotKey(slot, day);
+      const signupCount = getSignupCount(slot, day);
+      const available = slot.needed - signupCount;
+      
+      if (key !== selectedSlot && available > 0) {
+        checkboxes.push({ key, slot, available });
+      }
+    });
+    
+    if (checkboxes.length > 0) {
+      const dayDiv = document.createElement('div');
+      dayDiv.className = 'slots-by-day';
+      
+      const heading = document.createElement('div');
+      heading.className = 'day-heading';
+      heading.textContent = dayLabels[day];
+      dayDiv.appendChild(heading);
+      
+      checkboxes.forEach(({ key, slot, available }) => {
+        const checkboxItem = document.createElement('div');
+        checkboxItem.className = 'checkbox-item';
+        checkboxItem.innerHTML = `
+          <input type="checkbox" id="alt-${key}" name="alternateSlot" value="${key}">
+          <label for="alt-${key}">${slot.time} - ${slot.gate} (${available} spot${available === 1 ? '' : 's'} available)</label>
+        `;
+        dayDiv.appendChild(checkboxItem);
+      });
+      
+      container.appendChild(dayDiv);
+    }
+  });
 }
 
 async function submitForm() {
@@ -250,6 +323,11 @@ async function submitForm() {
   const email = document.getElementById('email').value.trim();
   const phone = document.getElementById('phone').value.trim();
   const slot = document.getElementById('selectedSlot').value;
+  const waitlist = document.getElementById('waitlist').checked;
+  
+  // Get alternate slots
+  const alternateCheckboxes = document.querySelectorAll('input[name="alternateSlot"]:checked');
+  const alternateSlots = Array.from(alternateCheckboxes).map(cb => cb.value).join(', ');
   
   if (!name || !email || !phone || !slot) {
     showMessage('Please fill in all fields and select a time slot', 'error', 'signupConfirmation');
@@ -268,6 +346,8 @@ async function submitForm() {
         email, 
         phone, 
         slot,
+        waitlist,
+        alternateSlots,
         action: 'signup'
       })
     });
@@ -275,7 +355,7 @@ async function submitForm() {
     const data = await response.json();
     
     if (data.success) {
-      const signup = { name, email, phone, slot, status: 'active', timestamp: new Date().toISOString() };
+      const signup = { name, email, phone, slot, waitlist, alternateSlots, status: 'active', timestamp: new Date().toISOString() };
       signups.push(signup);
       saveSignups();
       
@@ -357,6 +437,8 @@ function resetForm() {
   document.getElementById('email').value = '';
   document.getElementById('phone').value = '';
   document.getElementById('selectedSlot').value = '';
+  document.getElementById('waitlist').checked = false;
+  document.querySelectorAll('input[name="alternateSlot"]').forEach(cb => cb.checked = false);
 }
 
 function resetCancellation() {
